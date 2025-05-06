@@ -33,7 +33,15 @@
       minSpeed: 0.8,
       maxSpeed: 3.5,
       sparseness: 0.75,
-      resetProbability: 0.975
+      resetProbability: 0.975,
+      // Time dilation effect parameters
+      timeDilation: {
+        active: true,               // Toggle the effect on/off
+        radius: 150,                // Radius of influence in pixels
+        strength: 0.85,             // How much to slow down (0-1, lower = slower)
+        falloff: 2,                 // Exponential falloff rate (higher = sharper edge)
+        minSpeedFactor: 0.15        // Minimum speed factor at cursor center
+      }
     };
 
     // Matrix rain characters (katakana, A-Z, 0-9)
@@ -106,20 +114,52 @@
     }
 
     // Advance a stream's state
-    function advanceStream(stream, screenHeight) {
+    function advanceStream(stream, screenHeight, x, mouse) {
       const trailLength = getTrailLength(stream.y, screenHeight);
-      const speed = getDropSpeed(stream.y, screenHeight);
+      const baseSpeed = getDropSpeed(stream.y, screenHeight);
+      
+      // Apply time dilation based on distance to cursor
+      const dilationFactor = getTimeDilationFactor(x, stream.y, mouse);
+      const speed = baseSpeed * dilationFactor;
+      
       stream.trail.pop();
       stream.trail.unshift(getRandomChar());
       stream.y += speed * CONFIG.fontSize;
+      
       // Reset stream to top with some randomness
       if (stream.y - trailLength * CONFIG.fontSize > screenHeight && Math.random() > CONFIG.resetProbability) {
         stream.y = getRandomInitialY(screenHeight);
       }
     }
 
+    // Calculate time dilation factor based on distance to mouse cursor
+    function getTimeDilationFactor(x, y, mouse) {
+      // If effect is disabled or mouse is not on canvas, no dilation
+      if (!CONFIG.timeDilation.active || !mouse.active) {
+        return 1;
+      }
+      
+      // Calculate distance from stream to mouse cursor
+      const dx = x - mouse.x;
+      const dy = y - mouse.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Apply smooth falloff based on distance
+      if (distance >= CONFIG.timeDilation.radius) {
+        return 1; // No effect beyond radius
+      }
+      
+      // Calculate dilation factor - approaches minSpeedFactor at center
+      const normalizedDistance = distance / CONFIG.timeDilation.radius;
+      const dilationStrength = Math.pow(normalizedDistance, CONFIG.timeDilation.falloff);
+      
+      // Blend between minimum speed factor and normal speed
+      return CONFIG.timeDilation.minSpeedFactor + 
+             (1 - CONFIG.timeDilation.minSpeedFactor) * dilationStrength;
+    }
+
     // Draw a single frame of Matrix rain
-    function drawMatrixRain(ctx, canvas, streams, columns) {
+    function drawMatrixRain(ctx, canvas, streams, columns, mouse) {
       ctx.fillStyle = `rgba(0, 0, 0, ${CONFIG.backgroundAlpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.font = CONFIG.fontSize + 'px monospace';
@@ -129,7 +169,23 @@
         if (!stream) continue;
         const x = i * CONFIG.fontSize;
         drawStreamTrail(ctx, stream, x, canvas.height);
-        advanceStream(stream, canvas.height);
+        advanceStream(stream, canvas.height, x, mouse);
+      }
+      
+      // Draw time dilation bubble indicator (subtle visual feedback)
+      if (CONFIG.timeDilation.active && mouse.active) {
+        const gradient = ctx.createRadialGradient(
+          mouse.x, mouse.y, 0,
+          mouse.x, mouse.y, CONFIG.timeDilation.radius
+        );
+        gradient.addColorStop(0, 'rgba(255,255,255,0.1)');
+        gradient.addColorStop(0.7, 'rgba(255,255,255,0.03)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(mouse.x, mouse.y, CONFIG.timeDilation.radius, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -147,6 +203,35 @@
       const canvas = getCanvasById('matrix');
       const ctx = canvas.getContext('2d');
       let { columns, streams } = setCanvasAndStreams(canvas);
+      
+      // Track mouse position
+      const mouse = {
+        x: -1000,
+        y: -1000,
+        active: false
+      };
+      
+      // Mouse event handlers
+      function updateMousePosition(e) {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        mouse.active = true;
+      }
+      
+      function resetMousePosition() {
+        mouse.active = false;
+        mouse.x = -1000;
+        mouse.y = -1000;
+      }
+      
+      // Add mouse event listeners
+      canvas.addEventListener('mousemove', updateMousePosition);
+      canvas.addEventListener('mouseout', resetMousePosition);
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        updateMousePosition(e.touches[0]);
+      });
+      canvas.addEventListener('touchend', resetMousePosition);
 
       // Redraw and resize handler
       function onResize() {
@@ -158,7 +243,7 @@
 
       // Animation loop
       function animate() {
-        drawMatrixRain(ctx, canvas, streams, columns);
+        drawMatrixRain(ctx, canvas, streams, columns, mouse);
         requestAnimationFrame(animate);
       }
       animate();
