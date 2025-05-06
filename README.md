@@ -1,14 +1,10 @@
 # Rainy-Vibes
 
-<div align="center">
-  <img src="preview.gif" alt="Matrix Rain Animation" width="100%">
-</div>
-
 A stylish Matrix-inspired rain animation built with pure HTML, CSS, and JavaScript. Watch as colorful characters cascade down your screen in a mesmerizing digital rainfall effect.
 
 ## Live Demo
 
-This animation is automatically deployed via GitHub Pages. [Check out the live demo](https://MichaelMW.github.io/Rainy-Vibes/)
+This animation is hosted on GitHub Pages: [https://michaelmw.github.io/Rainy-Vibes/](https://michaelmw.github.io/Rainy-Vibes/)
 
 ## Features
 
