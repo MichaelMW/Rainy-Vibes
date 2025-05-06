@@ -4,9 +4,9 @@ A stylish Matrix-inspired rain animation built with pure HTML, CSS, and JavaScri
 
 ## Live Demo
 
-This animation is automatically deployed via GitHub Pages. [Check out the live demo](https://YOUR_USERNAME.github.io/Rainy-Vibes/)
+This animation is automatically deployed via GitHub Pages. [Check out the live demo](https://michaelmw.github.io/Rainy-Vibes/)
 
-![Matrix Rain Preview](https://raw.githubusercontent.com/YOUR_USERNAME/Rainy-Vibes/main/preview.gif)
+![Matrix Rain Preview](https://raw.githubusercontent.com/MichaelMW/Rainy-Vibes/main/preview.gif)
 
 ## Features
 
