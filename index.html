@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Creative Matrix Rain Effect</title>
+  <title>Minimal Matrix Rain</title>
   <style>
     html, body {
       margin: 0;
@@ -22,147 +22,147 @@
 <body>
   <canvas id="matrix"></canvas>
   <script>
-    const canvas = document.getElementById('matrix');
-    const ctx = canvas.getContext('2d');
+    // Parameterized configuration for easy adjustment
+    const CONFIG = {
+      matrixRgb: '0,255,65',                  // RGB for matrix green
+      headColor: 'rgba(180,255,180,0.7)',
+      backgroundAlpha: 0.75,
+      fontSize: 14,
+      baseTrailLength: 12,
+      maxTrailLength: 36,
+      minSpeed: 0.8,
+      maxSpeed: 3.5,
+      sparseness: 0.75,
+      resetProbability: 0.975
+    };
 
-    // Animated background gradient
-    let gradAngle = 0;
-    function drawBackground() {
-      gradAngle += 0.002;
-      const grad = ctx.createLinearGradient(
-        canvas.width/2 + Math.cos(gradAngle)*canvas.width/2, 0,
-        canvas.width/2 - Math.cos(gradAngle)*canvas.width/2, canvas.height
-      );
-      grad.addColorStop(0, `hsl(${(gradAngle*60)%360}, 60%, 10%)`);
-      grad.addColorStop(1, `hsl(${(gradAngle*60+120)%360}, 60%, 10%)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Matrix rain characters (katakana, A-Z, 0-9)
+    const MATRIX_CHARS = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズヅブプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+
+    // Get the canvas element safely and handle errors
+    function getCanvasById(id) {
+      const element = document.getElementById(id);
+      if (!element) {
+        throw new Error(`Canvas element with id '${id}' not found.`);
+      }
+      return element;
     }
 
-    // Set canvas size
-    function resize() {
+    // Get a random Matrix character
+    function getRandomChar() {
+      return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+    }
+
+    // Calculate trail length based on y position (gravity effect)
+    function getTrailLength(y, screenHeight) {
+      const ratio = Math.min(1, Math.max(0, y / screenHeight));
+      return Math.round(CONFIG.baseTrailLength + (CONFIG.maxTrailLength - CONFIG.baseTrailLength) * Math.pow(ratio, 1.2));
+    }
+
+    // Calculate drop speed based on y position
+    function getDropSpeed(y, screenHeight) {
+      const ratio = Math.min(1, Math.max(0, y / screenHeight));
+      return CONFIG.minSpeed + (CONFIG.maxSpeed - CONFIG.minSpeed) * Math.pow(ratio, 1.5);
+    }
+
+    // Get a random initial Y position for a stream
+    function getRandomInitialY(screenHeight) {
+      const minY = -CONFIG.baseTrailLength * CONFIG.fontSize;
+      return minY + Math.random() * (screenHeight - minY);
+    }
+
+    // Create a single stream object
+    function createStream(screenHeight) {
+      return {
+        y: getRandomInitialY(screenHeight),
+        trail: Array.from({ length: CONFIG.baseTrailLength }, getRandomChar)
+      };
+    }
+
+    // Create initial streams for each column
+    function createStreams(numColumns, screenHeight) {
+      return Array.from({ length: numColumns }, () => {
+        if (Math.random() < CONFIG.sparseness) return null;
+        return createStream(screenHeight);
+      });
+    }
+
+    // Draw a single stream's trail
+    function drawStreamTrail(ctx, stream, x, screenHeight) {
+      const trailLength = getTrailLength(stream.y, screenHeight);
+      // Extend or shrink trail to match calculated length
+      while (stream.trail.length < trailLength) stream.trail.unshift(getRandomChar());
+      while (stream.trail.length > trailLength) stream.trail.pop();
+      // Draw trail from tail to head for proper fading
+      for (let t = trailLength - 1; t >= 0; t--) {
+        const y = stream.y - t * CONFIG.fontSize;
+        if (y < 0 || y > screenHeight) continue;
+        const alpha = 0.12 + 0.38 * (1 - t / trailLength);
+        ctx.fillStyle = t === 0
+          ? CONFIG.headColor
+          : `rgba(${CONFIG.matrixRgb},${alpha})`;
+        ctx.fillText(stream.trail[t], x, y);
+      }
+    }
+
+    // Advance a stream's state
+    function advanceStream(stream, screenHeight) {
+      const trailLength = getTrailLength(stream.y, screenHeight);
+      const speed = getDropSpeed(stream.y, screenHeight);
+      stream.trail.pop();
+      stream.trail.unshift(getRandomChar());
+      stream.y += speed * CONFIG.fontSize;
+      // Reset stream to top with some randomness
+      if (stream.y - trailLength * CONFIG.fontSize > screenHeight && Math.random() > CONFIG.resetProbability) {
+        stream.y = getRandomInitialY(screenHeight);
+      }
+    }
+
+    // Draw a single frame of Matrix rain
+    function drawMatrixRain(ctx, canvas, streams, columns) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${CONFIG.backgroundAlpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = CONFIG.fontSize + 'px monospace';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i < columns; i++) {
+        const stream = streams[i];
+        if (!stream) continue;
+        const x = i * CONFIG.fontSize;
+        drawStreamTrail(ctx, stream, x, canvas.height);
+        advanceStream(stream, canvas.height);
+      }
+    }
+
+    // Set canvas size and reinitialize streams
+    function setCanvasAndStreams(canvas) {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      const columns = Math.floor(canvas.width / CONFIG.fontSize);
+      const streams = createStreams(columns, canvas.height);
+      return { columns, streams };
     }
-    window.addEventListener('resize', resize);
-    resize();
 
-    // Characters to use (including some creative symbols)
-    const chars = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズヅブプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()[]{}<>?~'.split('');
+    // Main execution
+    (function main() {
+      const canvas = getCanvasById('matrix');
+      const ctx = canvas.getContext('2d');
+      let { columns, streams } = setCanvasAndStreams(canvas);
 
-    // Creative twist: Each column has a random color and speed, and sometimes "glitches" with emoji or ASCII art
-    const emojis = ['💀','👾','🤖','🦾','🧬','⚡','🔥','🌟','✨','🛸','🚀','🦄','🎲','🎮','🎵','🎶','🎤','🎧','🔮','🧠','🕹️'];
-    const asciiArt = ['<3', ':-)', '¯\\_(ツ)_/¯', '∞', 'π', 'Ω', 'Σ', 'λ', 'ψ', 'Δ'];
-
-    const fontSize = 20;
-    let columns = Math.floor(window.innerWidth / fontSize);
-    let drops = [];
-    let colors = [];
-    let speeds = [];
-    let directions = [];
-    let portalColumns = [];
-    let rainbowMode = false;
-    let rainbowModeTimer = 0;
-    let glitchTimer = 0;
-    let explosionColumns = [];
-
-    function initColumns() {
-      columns = Math.floor(window.innerWidth / fontSize);
-      drops = [];
-      colors = [];
-      speeds = [];
-      directions = [];
-      portalColumns = [];
-      explosionColumns = [];
-      for (let i = 0; i < columns; i++) {
-        drops[i] = Math.random() * -50;
-        colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
-        speeds[i] = 1 + Math.random() * 2;
-        directions[i] = 1;
-        if (Math.random() < 0.05) portalColumns[i] = Math.floor(Math.random()*columns);
-        else portalColumns[i] = null;
-        explosionColumns[i] = 0;
+      // Redraw and resize handler
+      function onResize() {
+        const result = setCanvasAndStreams(canvas);
+        columns = result.columns;
+        streams = result.streams;
       }
-    }
-    initColumns();
-    window.addEventListener('resize', () => {
-      resize();
-      initColumns();
-    });
+      window.addEventListener('resize', onResize);
 
-    function triggerRainbowMode() {
-      rainbowMode = true;
-      rainbowModeTimer = 120 + Math.floor(Math.random()*120); // 2-4 seconds
-    }
-    function triggerGlitch() {
-      glitchTimer = 30 + Math.floor(Math.random()*30); // 0.5-1s
-    }
-    function triggerExplosion(col) {
-      explosionColumns[col] = 20 + Math.floor(Math.random()*20);
-    }
-
-    function draw() {
-      drawBackground();
-      if (rainbowMode) {
-        rainbowModeTimer--;
-        if (rainbowModeTimer <= 0) rainbowMode = false;
+      // Animation loop
+      function animate() {
+        drawMatrixRain(ctx, canvas, streams, columns);
+        requestAnimationFrame(animate);
       }
-      if (glitchTimer > 0) {
-        glitchTimer--;
-        ctx.save();
-        ctx.setTransform(1, 0.1*Math.sin(glitchTimer*2), 0.1*Math.cos(glitchTimer*2), 1, Math.random()*10-5, Math.random()*10-5);
-      }
-      ctx.font = fontSize + "px monospace";
-      for (let i = 0; i < columns; i++) {
-        // Rainbow mode color
-        let colColor = rainbowMode ? `hsl(${(Date.now()/10+i*20)%360}, 100%, 60%)` : colors[i];
-        // Occasionally reverse direction
-        if (Math.random() < 0.0005) directions[i] *= -1;
-        // Occasionally trigger portal
-        let portal = portalColumns[i];
-        let char;
-        if (explosionColumns[i] > 0) {
-          char = emojis[Math.floor(Math.random()*emojis.length)];
-          colColor = `hsl(${Math.random()*360},100%,70%)`;
-          explosionColumns[i]--;
-        } else if (Math.random() < 0.003) {
-          triggerExplosion(i);
-          char = emojis[Math.floor(Math.random()*emojis.length)];
-        } else if (Math.random() < 0.005) {
-          char = emojis[Math.floor(Math.random() * emojis.length)];
-        } else if (Math.random() < 0.01) {
-          char = asciiArt[Math.floor(Math.random() * asciiArt.length)];
-        } else {
-          char = chars[Math.floor(Math.random() * chars.length)];
-        }
-        ctx.fillStyle = colColor;
-        let y = drops[i] * fontSize;
-        ctx.fillText(char, i * fontSize, y);
-        // Portal: teleport char to another column
-        if (portal !== null && Math.random() < 0.01) {
-          drops[portal] = drops[i];
-        }
-        // Rain logic
-        drops[i] += speeds[i] * directions[i];
-        if (directions[i] === 1 && drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-          drops[i] = 0;
-          colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
-          speeds[i] = 1 + Math.random() * 2;
-        }
-        if (directions[i] === -1 && drops[i] < 0) {
-          drops[i] = Math.floor(canvas.height/fontSize);
-          colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
-          speeds[i] = 1 + Math.random() * 2;
-        }
-      }
-      if (glitchTimer > 0) ctx.restore();
-      // Rarely trigger rainbow mode or glitch
-      if (!rainbowMode && Math.random() < 0.0005) triggerRainbowMode();
-      if (glitchTimer === 0 && Math.random() < 0.0007) triggerGlitch();
-      requestAnimationFrame(draw);
-    }
-
-    draw();
+      animate();
+    })();
   </script>
 </body>
 </html>
