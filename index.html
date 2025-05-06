@@ -25,6 +25,20 @@
     const canvas = document.getElementById('matrix');
     const ctx = canvas.getContext('2d');
 
+    // Animated background gradient
+    let gradAngle = 0;
+    function drawBackground() {
+      gradAngle += 0.002;
+      const grad = ctx.createLinearGradient(
+        canvas.width/2 + Math.cos(gradAngle)*canvas.width/2, 0,
+        canvas.width/2 - Math.cos(gradAngle)*canvas.width/2, canvas.height
+      );
+      grad.addColorStop(0, `hsl(${(gradAngle*60)%360}, 60%, 10%)`);
+      grad.addColorStop(1, `hsl(${(gradAngle*60+120)%360}, 60%, 10%)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
     // Set canvas size
     function resize() {
       canvas.width = window.innerWidth;
@@ -41,52 +55,110 @@
     const asciiArt = ['<3', ':-)', '¯\\_(ツ)_/¯', '∞', 'π', 'Ω', 'Σ', 'λ', 'ψ', 'Δ'];
 
     const fontSize = 20;
-    const columns = Math.floor(window.innerWidth / fontSize);
-    const drops = [];
-    const colors = [];
-    const speeds = [];
+    let columns = Math.floor(window.innerWidth / fontSize);
+    let drops = [];
+    let colors = [];
+    let speeds = [];
+    let directions = [];
+    let portalColumns = [];
+    let rainbowMode = false;
+    let rainbowModeTimer = 0;
+    let glitchTimer = 0;
+    let explosionColumns = [];
 
-    for (let i = 0; i < columns; i++) {
-      drops[i] = Math.random() * -50; // start at random heights
-      colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
-      speeds[i] = 1 + Math.random() * 2;
+    function initColumns() {
+      columns = Math.floor(window.innerWidth / fontSize);
+      drops = [];
+      colors = [];
+      speeds = [];
+      directions = [];
+      portalColumns = [];
+      explosionColumns = [];
+      for (let i = 0; i < columns; i++) {
+        drops[i] = Math.random() * -50;
+        colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
+        speeds[i] = 1 + Math.random() * 2;
+        directions[i] = 1;
+        if (Math.random() < 0.05) portalColumns[i] = Math.floor(Math.random()*columns);
+        else portalColumns[i] = null;
+        explosionColumns[i] = 0;
+      }
+    }
+    initColumns();
+    window.addEventListener('resize', () => {
+      resize();
+      initColumns();
+    });
+
+    function triggerRainbowMode() {
+      rainbowMode = true;
+      rainbowModeTimer = 120 + Math.floor(Math.random()*120); // 2-4 seconds
+    }
+    function triggerGlitch() {
+      glitchTimer = 30 + Math.floor(Math.random()*30); // 0.5-1s
+    }
+    function triggerExplosion(col) {
+      explosionColumns[col] = 20 + Math.floor(Math.random()*20);
     }
 
     function draw() {
-      // Fade the canvas
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+      drawBackground();
+      if (rainbowMode) {
+        rainbowModeTimer--;
+        if (rainbowModeTimer <= 0) rainbowMode = false;
+      }
+      if (glitchTimer > 0) {
+        glitchTimer--;
+        ctx.save();
+        ctx.setTransform(1, 0.1*Math.sin(glitchTimer*2), 0.1*Math.cos(glitchTimer*2), 1, Math.random()*10-5, Math.random()*10-5);
+      }
       ctx.font = fontSize + "px monospace";
-
       for (let i = 0; i < columns; i++) {
-        // Creative twist: Occasionally drop an emoji or ASCII art
+        // Rainbow mode color
+        let colColor = rainbowMode ? `hsl(${(Date.now()/10+i*20)%360}, 100%, 60%)` : colors[i];
+        // Occasionally reverse direction
+        if (Math.random() < 0.0005) directions[i] *= -1;
+        // Occasionally trigger portal
+        let portal = portalColumns[i];
         let char;
-        if (Math.random() < 0.005) {
+        if (explosionColumns[i] > 0) {
+          char = emojis[Math.floor(Math.random()*emojis.length)];
+          colColor = `hsl(${Math.random()*360},100%,70%)`;
+          explosionColumns[i]--;
+        } else if (Math.random() < 0.003) {
+          triggerExplosion(i);
+          char = emojis[Math.floor(Math.random()*emojis.length)];
+        } else if (Math.random() < 0.005) {
           char = emojis[Math.floor(Math.random() * emojis.length)];
         } else if (Math.random() < 0.01) {
           char = asciiArt[Math.floor(Math.random() * asciiArt.length)];
         } else {
           char = chars[Math.floor(Math.random() * chars.length)];
         }
-
-        // Set color per column
-        ctx.fillStyle = colors[i];
-
-        // Draw the character
-        ctx.fillText(char, i * fontSize, drops[i] * fontSize);
-
-        // Randomly reset drop to top or let it fall
-        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+        ctx.fillStyle = colColor;
+        let y = drops[i] * fontSize;
+        ctx.fillText(char, i * fontSize, y);
+        // Portal: teleport char to another column
+        if (portal !== null && Math.random() < 0.01) {
+          drops[portal] = drops[i];
+        }
+        // Rain logic
+        drops[i] += speeds[i] * directions[i];
+        if (directions[i] === 1 && drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
           drops[i] = 0;
-          // Change color and speed for a new "rain"
           colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
           speeds[i] = 1 + Math.random() * 2;
         }
-
-        drops[i] += speeds[i];
+        if (directions[i] === -1 && drops[i] < 0) {
+          drops[i] = Math.floor(canvas.height/fontSize);
+          colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
+          speeds[i] = 1 + Math.random() * 2;
+        }
       }
-
+      if (glitchTimer > 0) ctx.restore();
+      // Rarely trigger rainbow mode or glitch
+      if (!rainbowMode && Math.random() < 0.0005) triggerRainbowMode();
+      if (glitchTimer === 0 && Math.random() < 0.0007) triggerGlitch();
       requestAnimationFrame(draw);
     }
 
