@@ -40,7 +40,15 @@
         radius: 500,                // Radius of influence in pixels
         strength: 0.99,             // How much to slow down (0-1, lower = slower)
         falloff: 2,                 // Exponential falloff rate (higher = sharper edge)
-        minSpeedFactor: 0        // Minimum speed factor at cursor center
+        minSpeedFactor: 0,       // Minimum speed factor at cursor center
+        // Visual effects for the time dilation bubble
+        visual: {
+          pulseSpeed: 2000,        // Time in ms for one pulse cycle
+          glowIntensity: 0.15,     // Max intensity of the character glow (0-1)
+          rippleCount: 3,          // Number of ripple circles
+          gridSize: 15,            // Size of grid cells in pixels
+          gridOpacity: 0.03        // Grid line opacity
+        }
       }
     };
 
@@ -96,20 +104,42 @@
     }
 
     // Draw a single stream's trail
-    function drawStreamTrail(ctx, stream, x, screenHeight) {
+    function drawStreamTrail(ctx, stream, x, screenHeight, mouse) {
       const trailLength = getTrailLength(stream.y, screenHeight);
-      // Extend or shrink trail to match calculated length
       while (stream.trail.length < trailLength) stream.trail.unshift(getRandomChar());
       while (stream.trail.length > trailLength) stream.trail.pop();
-      // Draw trail from tail to head for proper fading
+      
       for (let t = trailLength - 1; t >= 0; t--) {
         const y = stream.y - t * CONFIG.fontSize;
         if (y < 0 || y > screenHeight) continue;
-        const alpha = 0.12 + 0.38 * (1 - t / trailLength);
+        
+        // Calculate distance from character to mouse
+        const dx = x - mouse.x;
+        const dy = y - mouse.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const inBubble = distance < CONFIG.timeDilation.radius;
+        
+        // Calculate base alpha and add glow if in bubble
+        let alpha = 0.12 + 0.38 * (1 - t / trailLength);
+        if (inBubble) {
+          const bubbleRatio = 1 - (distance / CONFIG.timeDilation.radius);
+          alpha += CONFIG.timeDilation.visual.glowIntensity * bubbleRatio;
+        }
+        
+        // Draw character with potential glow
         ctx.fillStyle = t === 0
           ? CONFIG.headColor
           : `rgba(${CONFIG.matrixRgb},${alpha})`;
         ctx.fillText(stream.trail[t], x, y);
+        
+        // Add subtle glow effect for characters in the bubble
+        if (inBubble && t === 0) {
+          const bubbleRatio = 1 - (distance / CONFIG.timeDilation.radius);
+          ctx.globalCompositeOperation = 'screen';
+          ctx.fillStyle = `rgba(180,255,180,${0.1 * bubbleRatio})`;
+          ctx.fillText(stream.trail[t], x, y);
+          ctx.globalCompositeOperation = 'source-over';
+        }
       }
     }
 
@@ -158,17 +188,91 @@
              (1 - CONFIG.timeDilation.minSpeedFactor) * dilationStrength;
     }
 
+    // Draw the time dilation bubble effects
+    function drawTimeDilationEffects(ctx, mouse) {
+      if (!CONFIG.timeDilation.active || !mouse.active) return;
+      
+      const { radius, visual } = CONFIG.timeDilation;
+      const time = performance.now();
+      
+      // Create composite effect
+      ctx.globalCompositeOperation = 'screen';
+      
+      // Draw ripple effect
+      for (let i = 0; i < visual.rippleCount; i++) {
+        const phase = (time % visual.pulseSpeed) / visual.pulseSpeed;
+        const rippleRadius = radius * (0.7 + 0.3 * Math.sin(phase * Math.PI * 2 + i * Math.PI * 2 / visual.rippleCount));
+        const gradient = ctx.createRadialGradient(
+          mouse.x, mouse.y, rippleRadius * 0.8,
+          mouse.x, mouse.y, rippleRadius
+        );
+        
+        gradient.addColorStop(0, 'rgba(120,255,180,0)');
+        gradient.addColorStop(0.5, `rgba(120,255,180,${0.02 * Math.sin(phase * Math.PI)})`);
+        gradient.addColorStop(1, 'rgba(120,255,180,0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(mouse.x, mouse.y, rippleRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Draw grid pattern
+      ctx.strokeStyle = `rgba(120,255,180,${visual.gridOpacity})`;
+      ctx.lineWidth = 0.5;
+      
+      const gridOffset = (time % (visual.gridSize * 4)) / (visual.gridSize * 4);
+      const startX = mouse.x - radius;
+      const startY = mouse.y - radius;
+      const endX = mouse.x + radius;
+      const endY = mouse.y + radius;
+      
+      // Vertical lines
+      for (let x = startX - (startX % visual.gridSize); x <= endX; x += visual.gridSize) {
+        const distanceRatio = 1 - Math.min(1, Math.abs(x - mouse.x) / radius);
+        if (distanceRatio <= 0) continue;
+        
+        ctx.globalAlpha = distanceRatio * visual.gridOpacity;
+        ctx.beginPath();
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+        ctx.stroke();
+      }
+      
+      // Horizontal lines
+      for (let y = startY - (startY % visual.gridSize); y <= endY; y += visual.gridSize) {
+        const distanceRatio = 1 - Math.min(1, Math.abs(y - mouse.y) / radius);
+        if (distanceRatio <= 0) continue;
+        
+        ctx.globalAlpha = distanceRatio * visual.gridOpacity;
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+        ctx.stroke();
+      }
+      
+      // Reset composite operation and alpha
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
+
     // Draw a single frame of Matrix rain
     function drawMatrixRain(ctx, canvas, streams, columns, mouse) {
+      // Clear with background
       ctx.fillStyle = `rgba(0, 0, 0, ${CONFIG.backgroundAlpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw time dilation effects first
+      drawTimeDilationEffects(ctx, mouse);
+      
+      // Draw matrix rain with enhanced trail effects
       ctx.font = CONFIG.fontSize + 'px monospace';
       ctx.textBaseline = 'top';
       for (let i = 0; i < columns; i++) {
         const stream = streams[i];
         if (!stream) continue;
         const x = i * CONFIG.fontSize;
-        drawStreamTrail(ctx, stream, x, canvas.height);
+        drawStreamTrail(ctx, stream, x, canvas.height, mouse);
         advanceStream(stream, canvas.height, x, mouse);
       }
       
