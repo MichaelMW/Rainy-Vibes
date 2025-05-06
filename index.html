@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Creative Matrix Rain Effect</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+      height: 100%;
+      width: 100%;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="matrix"></canvas>
+  <script>
+    const canvas = document.getElementById('matrix');
+    const ctx = canvas.getContext('2d');
+
+    // Set canvas size
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Characters to use (including some creative symbols)
+    const chars = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズヅブプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()[]{}<>?~'.split('');
+
+    // Creative twist: Each column has a random color and speed, and sometimes "glitches" with emoji or ASCII art
+    const emojis = ['💀','👾','🤖','🦾','🧬','⚡','🔥','🌟','✨','🛸','🚀','🦄','🎲','🎮','🎵','🎶','🎤','🎧','🔮','🧠','🕹️'];
+    const asciiArt = ['<3', ':-)', '¯\\_(ツ)_/¯', '∞', 'π', 'Ω', 'Σ', 'λ', 'ψ', 'Δ'];
+
+    const fontSize = 20;
+    const columns = Math.floor(window.innerWidth / fontSize);
+    const drops = [];
+    const colors = [];
+    const speeds = [];
+
+    for (let i = 0; i < columns; i++) {
+      drops[i] = Math.random() * -50; // start at random heights
+      colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
+      speeds[i] = 1 + Math.random() * 2;
+    }
+
+    function draw() {
+      // Fade the canvas
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.font = fontSize + "px monospace";
+
+      for (let i = 0; i < columns; i++) {
+        // Creative twist: Occasionally drop an emoji or ASCII art
+        let char;
+        if (Math.random() < 0.005) {
+          char = emojis[Math.floor(Math.random() * emojis.length)];
+        } else if (Math.random() < 0.01) {
+          char = asciiArt[Math.floor(Math.random() * asciiArt.length)];
+        } else {
+          char = chars[Math.floor(Math.random() * chars.length)];
+        }
+
+        // Set color per column
+        ctx.fillStyle = colors[i];
+
+        // Draw the character
+        ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+
+        // Randomly reset drop to top or let it fall
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+          // Change color and speed for a new "rain"
+          colors[i] = `hsl(${Math.random() * 360}, 80%, 60%)`;
+          speeds[i] = 1 + Math.random() * 2;
+        }
+
+        drops[i] += speeds[i];
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
