@@ -9,7 +9,7 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: black;
+      background: #5555;
       height: 100%;
       width: 100%;
     }
@@ -27,28 +27,28 @@
     const CONFIG = {
       matrixRgb: '0,255,65',                  // RGB for matrix green
       headColor: 'rgba(180,255,180,0.7)',
-      backgroundAlpha: 0.75,
+      backgroundAlpha: 0.95,
       fontSize: 14,
       baseTrailLength: 12,
       maxTrailLength: 36,
-      minSpeed: 0.8,
-      maxSpeed: 3.5,
+      minSpeed: 0.1,
+      maxSpeed: 0.75,
       sparseness: 0.75,
       resetProbability: 0.975,
       // Time dilation effect parameters
       timeDilation: {
         active: true,               // Toggle the effect on/off
-        radius: 500,                // Radius of influence in pixels
-        strength: 0.99,             // How much to slow down (0-1, lower = slower)
-        falloff: 2,                 // Exponential falloff rate (higher = sharper edge)
+        radius: 300,                // Radius of influence in pixels
+        strength: 1,             // How much to slow down (0-1, lower = slower)
+        falloff: 1,                 // Exponential falloff rate (higher = sharper edge)
         minSpeedFactor: 0,       // Minimum speed factor at cursor center
         // Visual effects for the time dilation bubble
         visual: {
-          pulseSpeed: 2000,        // Time in ms for one pulse cycle
-          glowIntensity: 0.15,     // Max intensity of the character glow (0-1)
+          pulseSpeed: 5000,        // Time in ms for one pulse cycle
+          glowIntensity: 0.05,     // Max intensity of the character glow (0-1)
           rippleCount: 3,          // Number of ripple circles
-          gridSize: 15,            // Size of grid cells in pixels
-          gridOpacity: 0.03        // Grid line opacity
+          gridSize: 150,            // Size of grid cells in pixels
+          gridOpacity: 0.01        // Grid line opacity
         }
       }
     };
