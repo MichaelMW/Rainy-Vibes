@@ -9,7 +9,7 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: #5555;
+      background: black;
       height: 100%;
       width: 100%;
     }
@@ -27,28 +27,36 @@
     const CONFIG = {
       matrixRgb: '0,255,65',                  // RGB for matrix green
       headColor: 'rgba(180,255,180,0.7)',
-      backgroundAlpha: 0.95,
+      backgroundAlpha: 0.8,
       fontSize: 14,
       baseTrailLength: 12,
       maxTrailLength: 36,
       minSpeed: 0.1,
-      maxSpeed: 0.75,
-      sparseness: 0.75,
+      maxSpeed: 1,
+      sparseness: 0.5,
       resetProbability: 0.975,
+      // Depth variation parameters
+      depth: {
+        layers: 5,                    // Number of depth layers
+        speedVariation: 0.7,          // Speed variation between layers (0-1) - increased from 0.4
+        alphaVariation: 0.6,          // Alpha variation between layers (0-1) - increased from 0.3
+        shadeVariation: 0.5,          // Color shade variation (0-1) - increased from 0.2
+        sizeVariation: 0.4            // Font size variation (0-1) - new parameter
+      },
       // Time dilation effect parameters
       timeDilation: {
         active: true,               // Toggle the effect on/off
-        radius: 300,                // Radius of influence in pixels
+        radius: 150,                // Radius of influence in pixels
         strength: 1,             // How much to slow down (0-1, lower = slower)
         falloff: 1,                 // Exponential falloff rate (higher = sharper edge)
         minSpeedFactor: 0,       // Minimum speed factor at cursor center
         // Visual effects for the time dilation bubble
         visual: {
-          pulseSpeed: 5000,        // Time in ms for one pulse cycle
-          glowIntensity: 0.05,     // Max intensity of the character glow (0-1)
-          rippleCount: 3,          // Number of ripple circles
-          gridSize: 150,            // Size of grid cells in pixels
-          gridOpacity: 0.01        // Grid line opacity
+          pulseSpeed: 50000,        // Time in ms for one pulse cycle
+          glowIntensity: 0.1,     // Max intensity of the character glow (0-1)
+          rippleCount: 1,          // Number of ripple circles
+          gridSize: 5,            // Size of grid cells in pixels
+          gridOpacity: 0.3       // Grid line opacity
         }
       }
     };
@@ -92,7 +100,8 @@
     function createStream(screenHeight) {
       return {
         y: getRandomInitialY(screenHeight),
-        trail: Array.from({ length: CONFIG.baseTrailLength }, getRandomChar)
+        trail: Array.from({ length: CONFIG.baseTrailLength }, getRandomChar),
+        depth: Math.random()  // Random depth value between 0-1
       };
     }
 
@@ -110,34 +119,53 @@
       while (stream.trail.length < trailLength) stream.trail.unshift(getRandomChar());
       while (stream.trail.length > trailLength) stream.trail.pop();
       
+      // Calculate depth effects
+      const depthFactor = stream.depth;
+      const speedMod = 1 - (CONFIG.depth.speedVariation * depthFactor);
+      const alphaMod = 1 - (CONFIG.depth.alphaVariation * depthFactor);
+      const shadeMod = 1 - (CONFIG.depth.shadeVariation * depthFactor);
+      
+      // Calculate font size variation based on depth
+      // Deeper streams (higher depthFactor) appear smaller
+      const fontSizeMod = 1 - (CONFIG.depth.sizeVariation * depthFactor);
+      const fontSize = Math.max(8, Math.round(CONFIG.fontSize * fontSizeMod));
+      
+      // Parse and modify RGB based on depth
+      const [r, g, b] = CONFIG.matrixRgb.split(',').map(n => 
+        Math.round(Number(n) * shadeMod)
+      );
+      
       for (let t = trailLength - 1; t >= 0; t--) {
-        const y = stream.y - t * CONFIG.fontSize;
+        // Adjust y position based on font size to maintain alignment
+        const y = stream.y - t * fontSize;
         if (y < 0 || y > screenHeight) continue;
         
-        // Calculate distance from character to mouse
         const dx = x - mouse.x;
         const dy = y - mouse.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         const inBubble = distance < CONFIG.timeDilation.radius;
         
-        // Calculate base alpha and add glow if in bubble
-        let alpha = 0.12 + 0.38 * (1 - t / trailLength);
+        // Modify alpha based on depth - make deeper streams more transparent
+        let alpha = (0.12 + 0.38 * (1 - t / trailLength)) * alphaMod;
         if (inBubble) {
           const bubbleRatio = 1 - (distance / CONFIG.timeDilation.radius);
           alpha += CONFIG.timeDilation.visual.glowIntensity * bubbleRatio;
         }
         
-        // Draw character with potential glow
+        // Set font with depth-based size
+        ctx.font = `${fontSize}px monospace`;
+        
+        // Apply depth-aware colors
         ctx.fillStyle = t === 0
-          ? CONFIG.headColor
-          : `rgba(${CONFIG.matrixRgb},${alpha})`;
+          ? `rgba(${r + 180 * shadeMod},${g},${b + 180 * shadeMod},${alpha + 0.3})`
+          : `rgba(${r},${g},${b},${alpha})`;
         ctx.fillText(stream.trail[t], x, y);
         
-        // Add subtle glow effect for characters in the bubble
+        // Modified glow effect with depth
         if (inBubble && t === 0) {
           const bubbleRatio = 1 - (distance / CONFIG.timeDilation.radius);
           ctx.globalCompositeOperation = 'screen';
-          ctx.fillStyle = `rgba(180,255,180,${0.1 * bubbleRatio})`;
+          ctx.fillStyle = `rgba(180,255,180,${0.1 * bubbleRatio * alphaMod})`;
           ctx.fillText(stream.trail[t], x, y);
           ctx.globalCompositeOperation = 'source-over';
         }
@@ -149,17 +177,24 @@
       const trailLength = getTrailLength(stream.y, screenHeight);
       const baseSpeed = getDropSpeed(stream.y, screenHeight);
       
-      // Apply time dilation based on distance to cursor
+      // Calculate depth-based font size
+      const fontSizeMod = 1 - (CONFIG.depth.sizeVariation * stream.depth);
+      const fontSize = Math.max(8, Math.round(CONFIG.fontSize * fontSizeMod));
+      
+      // Apply depth-based speed modification
+      const depthSpeedFactor = 1 - (CONFIG.depth.speedVariation * stream.depth);
       const dilationFactor = getTimeDilationFactor(x, stream.y, mouse);
-      const speed = baseSpeed * dilationFactor;
+      const speed = baseSpeed * dilationFactor * depthSpeedFactor;
       
       stream.trail.pop();
       stream.trail.unshift(getRandomChar());
-      stream.y += speed * CONFIG.fontSize;
+      stream.y += speed * fontSize;  // Use depth-adjusted fontSize for movement
       
       // Reset stream to top with some randomness
-      if (stream.y - trailLength * CONFIG.fontSize > screenHeight && Math.random() > CONFIG.resetProbability) {
+      if (stream.y - trailLength * fontSize > screenHeight && Math.random() > CONFIG.resetProbability) {
         stream.y = getRandomInitialY(screenHeight);
+        // Randomize depth when resetting
+        stream.depth = Math.random();
       }
     }
 
